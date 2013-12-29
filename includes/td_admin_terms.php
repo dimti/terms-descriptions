@@ -178,11 +178,14 @@ class TD_Admin_Terms {
      */
     public function admin_menu() {
         load_plugin_textdomain( TD_TEXTDOMAIN, false, TD_TEXTDOMAIN . '/lang' );
-        $this->page = add_menu_page( __( 'Terms', TD_TEXTDOMAIN )
-                , __( 'Terms', TD_TEXTDOMAIN )
-                , 'manage_options'
-                , TD_TEXTDOMAIN
-                , array( $this, 'terms_page' ) );
+        $this->page = add_menu_page(
+            __( 'Terms', TD_TEXTDOMAIN )
+            , __( 'Terms', TD_TEXTDOMAIN )
+            , 'manage_options'
+            , TD_TEXTDOMAIN
+            , array( $this, 'terms_page' )
+            , ''
+        );
         add_action( 'admin_print_scripts-' . $this->page, array( $this, 'load_scripts' ) );
         add_action( 'admin_print_styles-' . $this->page, array( $this, 'load_styles' ) );
         
@@ -202,12 +205,8 @@ class TD_Admin_Terms {
      * @global type $wpdb wordpress database class
      */
     public function load_scripts() {
-        wp_enqueue_script( 'td_autocomplete', TD_URL . '/js/jquery.autocomplete.min.js'
-                , array( 'jquery' ), '1.0', true );
-        wp_enqueue_script( 'td_template', TD_URL . '/js/jquery.tmpl.min.js'
-                , array( 'jquery' ), '1.0', true );
         wp_enqueue_script( 'td_terms', TD_URL . '/js/terms.js'
-                , array( 'td_autocomplete', 'jquery-ui-dialog' ), '1.0', true );
+                , array( 'jquery-ui-autocomplete', 'jquery-ui-dialog', 'backbone' ), '1.0', true );
         //translations for use in JS code and array of terms ids
         wp_localize_script( 'td_terms', 'td_messages', array(
             'enter_term' => __( 'Enter the term, please', TD_TEXTDOMAIN ),
@@ -225,7 +224,9 @@ class TD_Admin_Terms {
             'term_update' => __( 'The term was updated', TD_TEXTDOMAIN ),
             'updating_permalinks' => __( 'Updating...', TD_TEXTDOMAIN ),
             'done' => __( 'Done!', TD_TEXTDOMAIN ),
+            'select' => __( 'Select', TD_TEXTDOMAIN ),
             'terms_ids' => json_encode( $this->terms_ids ),
+            'dbl_click_to_open_list' => __('Double click to open the titles list or type some letters', TD_TEXTDOMAIN),
         ) );
         
         global $wpdb;
@@ -248,8 +249,6 @@ class TD_Admin_Terms {
      * Including CSS files
      */
     public function load_styles() {
-        wp_enqueue_style( 'td_autocomplete_css', TD_URL . '/css/jquery.autocomplete.css' );
-        wp_enqueue_style( 'td_jquery_ui_smoothness', TD_URL . '/css/smoothness/jquery-ui-1.8.16.custom.css' );
         wp_enqueue_style( 'td_css', TD_URL . '/css/td_styles.css' );
     }
     
@@ -291,13 +290,17 @@ class TD_Admin_Terms {
     </table>
         <p class="submit">
             <input type="submit" name="td_add_term" id="td_add_term" class="button-primary" value="<?php _e( 'Add term', TD_TEXTDOMAIN ); ?>">
+            <span class="spinner" id="save_term_spinner"></span>
         </p>
     </form>
-    
+
+    <hr class="form-divider" />
     <form action="#" method="post" id="td_update_permalinks">
+        <span class="description"><?php _e('Press this button if you have updated permalinks structure.', TD_TEXTDOMAIN); ?></span>
         <input type="submit" class="button-primary" name="td_update_permalinks_btn" value="<?php _e( 'Update permalinks', TD_TEXTDOMAIN ); ?>" />
     </form>
-    
+    <hr class="form-divider" />
+
     <?php
     global $wpdb;
     //getting terms data
@@ -323,37 +326,47 @@ class TD_Admin_Terms {
     }
     ?>
     
-    <div id="terms_filter">
-        <form id="filter_form" action="<?php echo get_admin_url( null, 'admin.php' ); ?>" method="get">
+    <div id="terms_filter" class="tablenav top">
+        <form id="filter_form" class="alignleft" action="<?php echo get_admin_url( null, 'admin.php' ); ?>" method="get">
+            <div class="alignleft actions td_remove_selected">
+                <button class="button action" id="td_remove_selected_btn" disabled="disabled"><?php _e( 'Remove selected', TD_TEXTDOMAIN ); ?></button>
+            </div>
             <label><?php _e( 'Search', TD_TEXTDOMAIN ); ?> <input type="text" name="term_search" value="<?php echo $search_str; ?>" /></label>
-            <input type="submit" class="button-primary" value="<?php _e( 'Search', TD_TEXTDOMAIN ); ?>" />
+            <input type="submit" class="button action" value="<?php _e( 'Search', TD_TEXTDOMAIN ); ?>" />
             <input type="hidden" name="page" value="terms-descriptions" />
         <?php
         if ( isset( $_GET[ 'term_search' ] ) ) {
-            echo '<a href="' . get_admin_url( null, 'admin.php' ) . '?page=terms-descriptions" class="button-secondary">' . __( 'Cancel', TD_TEXTDOMAIN ) . '</a>';
+            echo '<a href="' . get_admin_url( null, 'admin.php' ) . '?page=terms-descriptions" class="button">' . __( 'Cancel', TD_TEXTDOMAIN ) . '</a>';
         }
         ?>
         </form>
+        <?php
+            $pagination = $this->pagination( $terms_count, $cur_page, ( int )$terms_per_page );
+            echo $pagination;
+        ?>
     </div>
     
     <?php
-    $pagination = $this->pagination( $terms_count, $cur_page, ( int )$terms_per_page );
-    echo $pagination;
-    
     //creating terms table
     ?>
     
     <table class="wp-list-table widefat fixed" cellspacing="0">
         <thead>
             <tr>
-                <th scope="col" class="short"><?php _e( 'Term ID', TD_TEXTDOMAIN ); ?></th>
+                <th scope="col" class="td-check-column">
+                    <label class="screen-reader-text" for="cb-select-all-1"><?php _e( 'Select All', TD_TEXTDOMAIN ); ?></label>
+                    <input id="cb-select-all-1" class="cb-select-all" type="checkbox">
+                </th>
                 <th scope="col"><?php _e( 'Term', TD_TEXTDOMAIN ); ?></th>
                 <th scope="col"><?php _e( 'Term Link', TD_TEXTDOMAIN ); ?></th>
             </tr>
         </thead>
         <tfoot>
             <tr>
-                <th scope="col" class="short"><?php _e( 'Term ID', TD_TEXTDOMAIN ); ?></th>
+                <th scope="col" class="td-check-column">
+                    <label class="screen-reader-text" for="cb-select-all-2"><?php _e( 'Select All', TD_TEXTDOMAIN ); ?></label>
+                    <input id="cb-select-all-2" class="cb-select-all" type="checkbox">
+                </th>
                 <th scope="col"><?php _e( 'Term', TD_TEXTDOMAIN ); ?></th>
                 <th scope="col"><?php _e( 'Term Link', TD_TEXTDOMAIN ); ?></th>
             </tr>
@@ -370,7 +383,11 @@ class TD_Admin_Terms {
         foreach ( $terms as $term ) {
 ?>
             <tr id="term_<?php echo $term->t_id; ?>">
-                <th scope="row" class="short"><?php echo $term->t_id; ?></th>
+                <th scope="row" class="check-column">
+                    <label class="screen-reader-text" for="cb-select-<?php echo $term->t_id; ?>"><?php _e( 'Select', TD_TEXTDOMAIN ); ?></label>
+                    <input id="cb-select-<?php echo $term->t_id; ?>" type="checkbox" name="td_term[]" value="<?php echo $term->t_id; ?>">
+                    <div class="locked-indicator"></div>
+                </th>
                 <td>
                     <strong><?php echo stripcslashes( $term->t_term ); ?></strong>
                     <div class="row-actions">
@@ -386,8 +403,12 @@ class TD_Admin_Terms {
 ?>
         </tbody>
     </table>
-    <?php echo $pagination; ?>
-    <div style="display: none;" id="td_update_permalinks_dialog"><p><?php _e( 'Premalinks updated', TD_TEXTDOMAIN ); ?>: <span id="td_update_progress">0</span>%</p></div>
+    <div class="tablenav bottom">
+        <?php echo $pagination; ?>
+    </div>
+    <div style="display: none;" id="td_update_permalinks_dialog">
+        <p><?php _e( 'Premalinks updated', TD_TEXTDOMAIN ); ?>: <span id="td_update_progress">0</span>%</p>
+    </div>
 </div>
 <?php        
     }
@@ -401,26 +422,42 @@ class TD_Admin_Terms {
      * @return string 
      */
     public function pagination( $terms_count, $cur_page, $terms_per_page ) {
-        $links = paginate_links( array(
-            'base'         => @add_query_arg( 'term_page', '%#%' ),
-            'format'       => '',
-            'total'        => ceil( $terms_count / $terms_per_page ),
-            'current'      => $cur_page,
-            'show_all'     => false,
-            'end_size'     => 3,
-            'mid_size'     => 2,
-            'prev_next'    => true,
-            'prev_text'    => __( '&laquo; Previous', TD_TEXTDOMAIN ),
-            'next_text'    => __( 'Next &raquo;', TD_TEXTDOMAIN ),
-            'type'         => 'plain',
-            'add_args'     => false,
-        ));
-        
-        $html = '<div class="tablenav">';
-        $html .= '<div class="tablenav-pages">';
-        $html .= '<span class="pagination-links">' . $links . '</span>';
+        $total_pages = ceil( $terms_count / $terms_per_page );
+
+        $first_page_link = add_query_arg( 'term_page', false );
+
+        $prev_disabled = '';
+        if ( $cur_page <= 1 ) {
+            $prev_page_link = add_query_arg( 'term_page', false );
+            $prev_disabled = ' disabled';
+        }
+        else {
+            $prev_page_link = add_query_arg( 'term_page', $cur_page - 1 );
+        }
+
+        $last_page_link = add_query_arg( 'term_page', $total_pages );
+
+        $next_disabled = '';
+        if ( $cur_page >= $total_pages ) {
+            $next_page_link = add_query_arg( 'term_page', $total_pages );
+            $next_disabled = ' disabled';
+        }
+        else {
+            $next_page_link = add_query_arg( 'term_page', $cur_page + 1 );
+        }
+
+        $html = '<div class="tablenav-pages">';
+        $html .= '<span class="pagination-links">';
+        $html .= '<a class="first-page' . $prev_disabled . '" title="' . esc_attr__( 'Go to the first page' ) . '" href="' . $first_page_link . '">«</a>';
+        $html .= '<a class="prev-page' . $prev_disabled . '" title="' . esc_attr__( 'Go to the previous page' ) . '" href="' . $prev_page_link . '">‹</a>';
+        $html .= '<span class="paging-input">';
+        $html .= '<span class="total-pages"> ' . $cur_page . '</span> ' . __('of') . ' <span class="total-pages">' . $total_pages . ' </span>';
+        $html .= '</span>';
+        $html .= '<a class="next-page' . $next_disabled . '" title="' . esc_attr__( 'Go to the next page' ) . '" href="' . $next_page_link . '">›</a>';
+        $html .= '<a class="last-page' . $next_disabled . '" title="' . esc_attr__( 'Go to the last page' ) . '" href="' . $last_page_link . '">»</a>';
+        $html .= '</span>';
         $html .= '</div>';
-        $html .= '</div>';
+
         return $html;
     }
 }
