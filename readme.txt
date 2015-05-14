@@ -50,7 +50,7 @@ Serbo-Croatian translations were created by [Borisa Djuraskovic]( http://www.web
 
 If you want to participate in the plugin development, create a pull request to the [official GutHub repository](https://github.com/vladimir-s/terms-descriptions "Terms Descriptions GitHub repository").
 
-The plugin is built with [PhpStorm]( http://www.jetbrains.com/phpstorm/ )
+The plugin built with [PhpStorm]( http://www.jetbrains.com/phpstorm/ )
 
 == Installation ==
 
@@ -72,7 +72,7 @@ The plugin is built with [PhpStorm]( http://www.jetbrains.com/phpstorm/ )
 2. Page selection autocomplete field
 3. Options page
 4. Tools page
-5. The plugin is built with PhpStorm
+5. The plugin built with PhpStorm
 
 == Changelog ==
 
