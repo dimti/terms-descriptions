@@ -59,6 +59,10 @@ class TD_Meta_Box {
                 return;
         }
 
+        if (!array_key_exists('disable_terms_descriptions', $_POST)) {
+            $_POST[ 'disable_terms_descriptions' ] = null;
+        }
+
         update_post_meta( $post_id, '_disable_terms_descriptions', $_POST[ 'disable_terms_descriptions' ] );
     }
 }
